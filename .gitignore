@@ -11,9 +11,10 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # Compiled source 
-*.mexa64
-*.mexw64
-*.asv
+# anotated out by MLE. LBHB exclusive, values set for potoroo
+#*.mexa64
+#*.mexw64
+#*.asv
 
 # Windows shortcuts
 *.lnk
