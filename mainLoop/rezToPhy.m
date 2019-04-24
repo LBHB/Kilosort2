@@ -9,7 +9,7 @@ function [spikeTimes, clusterIDs, amplitudes, templates, templateFeatures, ...
 
 
 
-
+	
 % spikeTimes will be in samples, not seconds
 rez.W = gather(single(rez.Wphy));
 rez.U = gather(single(rez.U));
