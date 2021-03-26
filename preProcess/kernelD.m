@@ -1,22 +1,28 @@
-function Kshift = kernelD(xcoords, ycoords, sig, dshift)
+function K = kernelD(xp0,yp0,len)
 
-ds = (xcoords(:) - xcoords(:)').^2 + (ycoords(:) - ycoords(:)').^2;
-Kdd = exp(-ds/sig^2);
+D  = size(xp0,1);
+N  = size(xp0,2); 
+M  = size(yp0,2);
 
-dnew = (xcoords(:) - xcoords(:)').^2 + (ycoords(:) + dshift - ycoords(:)').^2;
-Kdx = exp(-dnew/sig^2);
+% split M into chunks if on GPU to reduce memory usage
+if isa(xp0,'gpuArray') 
+    K=gpuArray.zeros(N,M);
+    cs  = 60;
+elseif N > 10000
+    K = zeros(N,M);
+    cs = 10000;
+else
+    K= zeros(N,M);
+    cs  = M;
+end
 
-Kshift = Kdx / (Kdd + 1e-2 * eye(size(Kdd,1)));
+for i = 1:ceil(M/cs)
+    ii = [((i-1)*cs+1):min(M,i*cs)];
+    mM = length(ii);
+    xp = repmat(xp0,1,1,mM);
+    yp = reshape(repmat(yp0(:,ii),N,1),D,N,mM);
 
-[amin, imin] = min(dnew, [], 2);
-
-
-n0 = size(Kshift,1);
-
-Kcopy = zeros(n0);
-Kcopy((imin-1)*n0 + [1:n0]') = 1;
-
-Kshift(amin<5^2, :) = Kcopy(amin<3^2, :);
-
-
-
+    Kn = exp( -sum(bsxfun(@times,(xp - yp).^2,1./(len.^2))/2,1));
+    K(:,ii)  = squeeze(Kn); 
+    
+end

@@ -221,7 +221,7 @@ classdef ksGUI < handle
             obj.H.settings.setMinfrTxt = uicontrol(...
                 'Parent', obj.H.settingsGrid,...
                 'Style', 'text', 'HorizontalAlignment', 'right', ...
-                'String', 'Min. firing rate per chan (0=include all chans)');
+                'String', {'N blocks for registration', '(0=none, 1=rigid, N=nonrigid)'});
             
             % choose threshold
             obj.H.settings.setThTxt = uicontrol(...
@@ -656,7 +656,10 @@ classdef ksGUI < handle
             conn = obj.P.chanMap.connected;
             chanMap.chanMap = obj.P.chanMap.chanMap(conn); 
             chanMap.xcoords = obj.P.chanMap.xcoords(conn); 
-            chanMap.ycoords = obj.P.chanMap.ycoords(conn); 
+            chanMap.ycoords = obj.P.chanMap.ycoords(conn);
+            if isfield(obj.P.chanMap, 'kcoords')
+                chanMap.kcoords = obj.P.chanMap.kcoords(conn);
+            end
             obj.ops.chanMap = chanMap;
             
             % sanitize options set in the gui
@@ -673,16 +676,12 @@ classdef ksGUI < handle
             
             obj.ops.NchanTOT = str2double(obj.H.settings.setnChanEdt.String);
             
-            obj.ops.minfr_goodchannels = str2double(obj.H.settings.setMinfrEdt.String);
-            if isempty(obj.ops.minfr_goodchannels)||isnan(obj.ops.minfr_goodchannels)
-                obj.ops.minfr_goodchannels = 0.1;
+            obj.ops.nblocks = str2double(obj.H.settings.setMinfrEdt.String);
+            if isempty(obj.ops.nblocks)||isnan(obj.ops.nblocks)
+                obj.ops.nblocks = 5;
             end
-            if obj.ops.minfr_goodchannels==0
-                obj.ops.throw_out_channels = false;
-            else
-                obj.ops.throw_out_channels = true;
-            end
-            obj.H.settings.setMinfrEdt.String = num2str(obj.ops.minfr_goodchannels);
+            obj.ops.throw_out_channels = false;
+            obj.H.settings.setMinfrEdt.String = num2str(obj.ops.nblocks);
 
             obj.ops.fs = str2num(obj.H.settings.setFsEdt.String);
             if isempty(obj.ops.fs)||isnan(obj.ops.fs)
@@ -724,7 +723,8 @@ classdef ksGUI < handle
             try
                 obj.log('Preprocessing...'); 
                 obj.rez = preprocessDataSub(obj.ops);
-                
+                obj.rez = datashift2(obj.rez, 1);
+
                 % update connected channels
                 igood = obj.rez.ops.igood;
                 previousGood = find(obj.P.chanMap.connected);
@@ -778,12 +778,12 @@ classdef ksGUI < handle
             % fit templates
             try
                 % pre-clustering to re-order batches by depth
-                obj.log('Pre-clustering to re-order batches by depth')
-                obj.rez = clusterSingleBatches(obj.rez);
+%                 obj.log('Pre-clustering to re-order batches by depth')
+%                 obj.rez = clusterSingleBatches(obj.rez);
                 
                 % main optimization
                 obj.log('Main optimization')
-                obj.rez = learnAndSolve8b(obj.rez);
+                obj.rez = learnAndSolve8b(obj.rez, 1);
                 
                 % final splits and merges
                 if 1
@@ -794,13 +794,12 @@ classdef ksGUI < handle
                     obj.log('Splits part 1/2...')
                     obj.rez = splitAllClusters(obj.rez, 1);
                     
-                    % final splits by amplitudes
-                    obj.log('Splits part 2/2...')
-                    obj.rez = splitAllClusters(obj.rez, 0);
-                    
                     % decide on cutoff
                     obj.log('Last step. Setting cutoff...')
                     obj.rez = set_cutoff(obj.rez);
+                    obj.rez.good = get_good_units(obj.rez);
+                    
+                    obj.log(sprintf('found %d good units \n', sum(obj.rez.good>0)))
                 end
                                                                 
                 obj.P.ksDone = true;
@@ -867,7 +866,7 @@ classdef ksGUI < handle
                     % filtered, whitened
                     obj.prepareForRun();
                     datAllF = ksFilter(datAll, obj.ops);
-                    datAllF = double(gather_try(datAllF));
+                    datAllF = double(gather(datAllF));
                     if isfield(obj.P, 'Wrot') && ~isempty(obj.P.Wrot)
                         %Wrot = obj.P.Wrot/obj.ops.scaleproc;
                         conn = obj.P.chanMap.connected;
