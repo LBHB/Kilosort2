@@ -17,10 +17,12 @@ end
 % all different directories corresponding to different experimental blocks
 ch=load(ops.chanMap);
 chans=sort(ch.chanMap);
-clear fs
-fs=cell(ops.Nchan, 1);
+fs=cell(ops.NchanTOT,1);
+for j = 1:ops.NchanTOT
+    ops.chanMap_KiloRaw(ch.chanMap==chans(j))=j;
+end
 
-for j = 1:ops.Nchan
+for j = 1:ops.NchanTOT
     ops.chanMap_KiloRaw(ch.chanMap==chans(j))=j;
     for k = 1:length(ops.root)
         sa(k,1) = dir(fullfile(ops.root{k}, sprintf('*CH%d.continuous', chans(j)) ));
@@ -35,14 +37,14 @@ end
 nBlocks     = unique(nblocks);
 nSamples    = 1024;  % fixed to 1024 for now!
 
-fid = cell(ops.Nchan, 1);
+fid = cell(ops.NchanTOT, 1);
 
 fprintf('Concatenating Open-Ephys data to a single binary file.\n')
 tic
 ops.nSamplesBlocks=nan(1,nBlocks);
 for k = 1:nBlocks
     fprintf('block %d of %d \n', k, nBlocks')
-    for j = 1:ops.Nchan
+    for j = 1:ops.NchanTOT
         fid{j} = fopen(fullfile(fs{j}(k).folder, fs{j}(k).name));
         % discard header information
         fseek(fid{j}, 1024, 0);
@@ -51,8 +53,8 @@ for k = 1:nBlocks
     nsamps = 0;
     flag = 1;
     while 1
-        samples = zeros(nSamples * 1000, ops.Nchan, 'int16');
-        for j = 1:ops.Nchan
+        samples = zeros(nSamples * 1000, ops.NchanTOT, 'int16');
+        for j = 1:ops.NchanTOT
             
             collectSamps    = zeros(nSamples * 1000, 1, 'int16');
             rawData         = fread(fid{j}, 1000 * (nSamples + 6), '1030*int16', 10, 'b');
@@ -95,7 +97,7 @@ for k = 1:nBlocks
     end
     ops.nSamplesBlocks(k) = nsamps;
     
-    for j = 1:ops.Nchan
+    for j = 1:ops.NchanTOT
        fclose(fid{j}); 
     end
     

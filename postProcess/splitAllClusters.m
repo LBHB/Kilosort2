@@ -11,6 +11,7 @@ sigmaMask   = ops.sigmaMask;
 
 ik = 0;
 Nfilt = size(rez.W,2);
+Nfilt_original=Nfilt;
 nsplits= 0;
 
 [iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear);
@@ -23,6 +24,14 @@ iW = squeeze(int32(iW));
 isplit = 1:Nfilt;
 dt = 1/1000;
 nccg = 0;
+
+if Nfilt+1>=size(rez.cProj,2)
+    ovverwrite_ind = size(rez.cProj,2)*ones(1,Nfilt*2);
+    ovverwrite_ind_sign = -1*ones(1,Nfilt*2);
+else
+    ovverwrite_ind = (Nfilt+1)*ones(1,Nfilt*2);
+    ovverwrite_ind_sign = ones(1,Nfilt*2);
+end
 
 while ik<Nfilt    
     if rem(ik, 100)==1
@@ -157,6 +166,63 @@ while ik<Nfilt
        rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik);
        rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);
        
+       rez.iNeigh(1, Nfilt)     = Nfilt;
+       % for new cluster, copy cProj projections onto original cluster to the last unaltered channel
+       rez.iNeigh(ovverwrite_ind(Nfilt),Nfilt)     = ik;
+       rez.cProj(isp(ilow),ovverwrite_ind(Nfilt))=rez.cProj(isp(ilow),1);
+       ovverwrite_ind(Nfilt)=ovverwrite_ind(Nfilt)+ovverwrite_ind_sign(Nfilt);
+       if ovverwrite_ind(Nfilt)>size(rez.cProj,2)
+               ovverwrite_ind(Nfilt)=Nfilt_original;
+               ovverwrite_ind_sign(Nfilt)=-1;
+       end
+           
+       % for original cluster copy cProj projections onto the new cluster to the last unaltered channel (these are the same as the original since they're not recomputed)
+       rez.iNeigh(ovverwrite_ind(ik),ik)     = Nfilt;
+       rez.cProj(isp(~ilow),ovverwrite_ind(ik))=rez.cProj(isp(~ilow),1);
+       ovverwrite_ind(ik)=ovverwrite_ind(ik)+ovverwrite_ind_sign(Nfilt);
+       if ovverwrite_ind(ik)>size(rez.cProj,2)
+               ovverwrite_ind(ik)=Nfilt_original;
+               ovverwrite_ind_sign(ik)=-1;
+       end
+           
+       %copy also the two most similar clusters
+       [sv,si]=sort(rez.simScore(:, Nfilt),'descend');
+       %si(si==1)=[];
+       si(ismember(si,[ik,Nfilt]))=[];
+       for i=1:2
+           % for new cluster, copy cProj projections onto si(i) to the last unaltered channel        
+            cPind=find(rez.iNeigh(:,Nfilt)==si(i),1);
+            if isempty(cPind)
+                cPind_si=find(rez.iNeigh(:,si(i))==ik,1);
+                if length(cPind_si)==1
+                    rez.iNeigh(ovverwrite_ind(Nfilt),Nfilt)     = si(i);
+                    rez.cProj(isp(ilow),ovverwrite_ind(Nfilt))=rez.cProj(isp(ilow),cPind_si);
+                    ovverwrite_ind(Nfilt)=ovverwrite_ind(Nfilt)+ovverwrite_ind_sign(Nfilt);
+                    if ovverwrite_ind(Nfilt)>size(rez.cProj,2)
+                        ovverwrite_ind(Nfilt)=Nfilt_original;
+                        ovverwrite_ind_sign(Nfilt)=-1;
+                    end
+                else
+                    warning('length(cPind_si) is %d for cluster %d. Not fixing template projections (cProj).',length(cPind_si),si(i))
+                end
+            end
+
+           % for si(i) cluster, copy cProj projections onto the new cluster to the last unaltered channel (these are the same as the original since they're not recomputed)
+           cPind_si=find(rez.iNeigh(:,si(i))==ik,1);
+           if length(cPind_si)==1
+               rez.iNeigh(ovverwrite_ind(si(i)),si(i)) = Nfilt;
+               inds = rez.st3(:, 2) == si(i);
+               rez.cProj(inds,ovverwrite_ind(si(i)))=rez.cProj(inds,cPind_si);
+               ovverwrite_ind(si(i))=ovverwrite_ind(si(i))+ovverwrite_ind_sign(si(i));
+               if ovverwrite_ind(si(i))>size(rez.cProj,2)
+                   ovverwrite_ind(si(i))=Nfilt_original;
+                   ovverwrite_ind_sign(si(i))=-1;
+               end
+           else
+               warning('length(cPind_si) is %d for cluster %d. Not fixing template projections (cProj).',length(cPind_si),si(i))
+           end
+       end
+       
        % try this cluster again
        ik = ik-1;
        
@@ -186,7 +252,7 @@ isplit = rez.simScore==1;
 rez.simScore = gather(max(WtW, [], 3));
 rez.simScore(isplit) = 1;
 
-rez.iNeigh   = gather(iList(:, 1:Nfilt));
+%rez.iNeigh   = gather(iList(:, 1:Nfilt));
 rez.iNeighPC    = gather(iC(:, iW(1:Nfilt)));
 
 rez.Wphy = cat(1, zeros(1+ops.nt0min, Nfilt, Nrank), rez.W);
