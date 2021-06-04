@@ -18,6 +18,7 @@ sigmaMask   = ops.sigmaMask;
 
 ik = 0;
 Nfilt = size(rez.W,2);
+Nfilt_original=Nfilt;
 nsplits= 0;
 
 [iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear); % determine what channels each template lives on
@@ -30,6 +31,14 @@ iW = squeeze(int32(iW));
 isplit = 1:Nfilt; % keep track of original cluster for each cluster. starts with all clusters being their own origin.
 dt = 1/1000;
 nccg = 0;
+
+if Nfilt+1>=size(rez.cProj,2)
+    ovverwrite_ind = size(rez.cProj,2)*ones(1,Nfilt*2);
+    ovverwrite_ind_sign = -1*ones(1,Nfilt*2);
+else
+    ovverwrite_ind = (Nfilt+1)*ones(1,Nfilt*2);
+    ovverwrite_ind_sign = ones(1,Nfilt*2);
+end
 
 while ik<Nfilt
     if rem(ik, 100)==1
@@ -143,7 +152,8 @@ while ik<Nfilt
     % finaly criteria to continue with the split: if the split piece is more than 5% of all spikes,
     % if the split piece is more than 300 spikes, and if the confidences for assigning spikes to
     % both clusters exceeds a preset criterion ccsplit
-    if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
+    if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300 
+       fprintf('Splitting %d/%d spikes from cluster %d into cluster %d.\n',sum(ilow),length(ilow),ik,Nfilt+1);
        % one cluster stays, one goes
        Nfilt = Nfilt + 1;
 
@@ -165,6 +175,59 @@ while ik<Nfilt
        rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik); % copy neighbor template list from the original
        rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik); % copy neighbor channel list from the original
 
+       rez.iNeigh(1, Nfilt)     = Nfilt;
+       % for new cluster, copy cProj projections onto original cluster to the last unaltered channel
+       rez.iNeigh(ovverwrite_ind(Nfilt),Nfilt)     = ik;
+       rez.cProj(isp(ilow),ovverwrite_ind(Nfilt))=rez.cProj(isp(ilow),1);
+       ovverwrite_ind(Nfilt)=ovverwrite_ind(Nfilt)+ovverwrite_ind_sign(Nfilt);
+       if ovverwrite_ind(Nfilt)>size(rez.cProj,2)
+               ovverwrite_ind(Nfilt)=Nfilt_original;
+               ovverwrite_ind_sign(Nfilt)=-1;
+       end
+           
+       % for original cluster copy cProj projections onto the new cluster to the last unaltered channel (these are the same as the original since they're not recomputed)
+       rez.iNeigh(ovverwrite_ind(ik),ik)     = Nfilt;
+       rez.cProj(isp(~ilow),ovverwrite_ind(ik))=rez.cProj(isp(~ilow),1);
+       ovverwrite_ind(ik)=ovverwrite_ind(ik)+ovverwrite_ind_sign(Nfilt);
+       if ovverwrite_ind(ik)>size(rez.cProj,2)
+               ovverwrite_ind(ik)=Nfilt_original;
+               ovverwrite_ind_sign(ik)=-1;
+       end
+           
+       %copy also the two most similar clusters
+       [sv,si]=sort(rez.simScore(:, Nfilt),'descend');
+       %si(si==1)=[];
+       si(ismember(si,[ik,Nfilt]))=[];
+       for i=1:2
+           % for new cluster, copy cProj projections onto si(i) to the last unaltered channel        
+            cPind=find(rez.iNeigh(:,Nfilt)==si(i),1);
+            if isempty(cPind)
+                cPind_si=find(rez.iNeigh(:,si(i))==ik,1);
+                rez.iNeigh(ovverwrite_ind(Nfilt),Nfilt)     = si(i);
+                rez.cProj(isp(ilow),ovverwrite_ind(Nfilt))=rez.cProj(isp(ilow),cPind_si);
+                ovverwrite_ind(Nfilt)=ovverwrite_ind(Nfilt)+ovverwrite_ind_sign(Nfilt);
+                if ovverwrite_ind(Nfilt)>size(rez.cProj,2)
+                    ovverwrite_ind(Nfilt)=Nfilt_original;
+                    ovverwrite_ind_sign(Nfilt)=-1;
+                end
+            end
+
+           % for si(i) cluster, copy cProj projections onto the new cluster to the last unaltered channel (these are the same as the original since they're not recomputed)
+           cPind_si=find(rez.iNeigh(:,si(i))==ik,1);
+           if isempty(cPind_si)
+               warning('Unable to copy projections of cluster %d onto %d because they don''t exist in the split cluster (%d)',si(i),Nfilt,ik);
+           else
+               rez.iNeigh(ovverwrite_ind(si(i)),si(i)) = Nfilt;
+               inds = rez.st3(:, 2) == si(i);
+               rez.cProj(inds,ovverwrite_ind(si(i)))=rez.cProj(inds,cPind_si);
+               ovverwrite_ind(si(i))=ovverwrite_ind(si(i))+ovverwrite_ind_sign(si(i));
+               if ovverwrite_ind(si(i))>size(rez.cProj,2)
+                   ovverwrite_ind(si(i))=Nfilt_original;
+                   ovverwrite_ind_sign(si(i))=-1;
+               end
+           end
+       end
+       
        % try this cluster again
        ik = ik-1; % the cluster piece that stays at this index needs to be tested for splits again before proceeding
        % the piece that became a new cluster will be tested again when we get to the end of the list
@@ -193,7 +256,7 @@ isplit = rez.simScore==1; % overwrite the similarity scores of clusters with sam
 rez.simScore = gather(max(WtW, [], 3));
 rez.simScore(isplit) = 1; % 1 means they come from the same parent
 
-rez.iNeigh   = gather(iList(:, 1:Nfilt)); % get the new neighbor templates
+%rez.iNeigh   = gather(iList(:, 1:Nfilt)); % get the new neighbor templates
 rez.iNeighPC    = gather(iC(:, iW(1:Nfilt))); % get the new neighbor channels
 
 rez.Wphy = cat(1, zeros(1+ops.nt0min, Nfilt, Nrank), rez.W); % for Phy, we need to pad the spikes with zeros so the spikes are aligned to the center of the window

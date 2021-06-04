@@ -143,11 +143,19 @@ if ~isempty(savePath)
     writeNPY(templates, fullfile(savePath, 'templates.npy'));
     writeNPY(templatesInds, fullfile(savePath, 'templates_ind.npy'));
 
-    %chanMap0ind = int32(chanMap0ind);
-    chanMap0ind = int32([1:rez.ops.Nchan]-1);
+    chanMap0ind = int32(chanMap0ind);
+    %chanMap0ind = int32([1:rez.ops.Nchan]-1);
     writeNPY(chanMap0ind, fullfile(savePath, 'channel_map.npy'));
     writeNPY([xcoords ycoords], fullfile(savePath, 'channel_positions.npy'));
-
+    if rez.ops.Nchan == rez.ops.NchanTOT
+        ch_labels=int32((1:rez.ops.Nchan)-1)';
+    else
+        ch=load(rez.ops.chanMapDir);
+        ch_labels=int32(find(ch.connected)-1);
+    end
+    writeNPY(ch_labels, fullfile(savePath, 'channel_labels.npy'));
+    
+    
     writeNPY(templateFeatures, fullfile(savePath, 'template_features.npy'));
     writeNPY(templateFeatureInds'-1, fullfile(savePath, 'template_feature_ind.npy'));% -1 for zero indexing
     writeNPY(pcFeatures, fullfile(savePath, 'pc_features.npy'));
@@ -185,9 +193,9 @@ if ~isempty(savePath)
 %         fprintf(fid,'n_channels_dat = %i\n',rez.ops.NchanTOT);
         [root, fname, ext] = fileparts(rez.ops.fproc);
 %         fprintf(fid,['dat_path = ''',fname ext '''\n']);
-        fprintf(fid,['dat_path = ''', strrep(rez.ops.fproc, '\', '/') '''\n']);
-        
-        fprintf(fid,'n_channels_dat = %i\n',rez.ops.Nchan);
+%         fprintf(fid,['dat_path = ''', strrep(rez.ops.fproc, '\', '/') '''\n']);
+%         
+%         fprintf(fid,'n_channels_dat = %i\n',rez.ops.Nchan);
         
         fprintf(fid,['dat_path = ''',rez.ops.fbinary '''\n']);
         fprintf(fid,'n_channels_dat = %i\n',rez.ops.NchanTOT);
@@ -198,8 +206,9 @@ if ~isempty(savePath)
         else
             fprintf(fid,'sample_rate = %i.\n',rez.ops.fs);
         end
-%         fprintf(fid,'hp_filtered = False');
-        fprintf(fid,'hp_filtered = True');
+         fprintf(fid,'hp_filtered = False\n');
+%        fprintf(fid,'hp_filtered = True');
+         fprintf(fid,'template_scaling = 20.0');
         
         fclose(fid);
     end
