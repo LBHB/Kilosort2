@@ -108,7 +108,7 @@ for k = 1:nBlocks
 	    block_size = size(samples,2);
 	else
 	    all_samples = cat(2, all_samples, samples);
-        end
+    end
 
         nsamps = nsamps + size(samples,2);
         nblocks = nblocks+1;
@@ -117,56 +117,6 @@ for k = 1:nBlocks
             break;
         end
     end
-
-    %%% Begin LBHB special code
-    
-    % check if need to remove laser artifacts
-    remove_laser_artifact_sec = getparm(ops, 'remove_laser_artifact_sec', 0);
-    interp_laser_sec = getparm(ops, 'interp_laser_sec', 0);
-    if remove_laser_artifact_sec>0
-       % need to get events to figure out when laser was turned on/off,
-       % so supply baphy events file
-       parmfile = fullfile(ops.runs_root, ops.runs{k});
-       LoadMFile(parmfile);
-       
-       fprintf('removing %.3f sec window around laser on/off\n', ...
-          remove_laser_artifact_sec);
-       if interp_laser_sec>0
-          fprintf('interpolating %.5f sec around laser on/off\n', interp_laser_sec);
-       end
-      
-       spikefs = ops.fs;
-       for chan = 1:size(all_samples,1)
-          tc = double(all_samples(chan,:))';
-          tc_out = remove_opto_artifacts(tc,...
-             ops.trial_onsets_{k}, spikefs, exptparams, exptevents, ...
-             remove_laser_artifact_sec, interp_laser_sec);
-          all_samples(chan,:) = int16(tc_out)';
-       end
-    end
-    
-    % check if good_trials are specified
-    if isfield(ops,'good_trials') && ~isempty(ops.good_trials{k})
-       first_trial=min(ops.good_trials{k});
-       last_trial=max(ops.good_trials{k});
-       if first_trial==1
-          first_bin = 1;
-       else
-          first_bin=ops.trial_onsets_{k}(first_trial);
-       end
-       if last_trial<length(ops.trial_onsets_{k})
-          last_bin = ops.trial_onsets_{k}(last_trial+1)-1;
-       else
-          last_bin = nsamps;
-       end
-       fprintf('keeping good trials %d-%d, reducing samples: %d -> %d\n',...
-          first_trial, last_trial, size(all_samples,2), last_bin-first_bin+1);
-       
-       all_samples = all_samples(:,first_bin:last_bin);
-       
-    end
-    
-    %%% End LBHB special code
 
     for j = 1:nblocks
        e=min((block_size*j),size(all_samples,2));
