@@ -26,11 +26,11 @@ dt = 1/1000;
 nccg = 0;
 
 if Nfilt+1>=size(rez.cProj,2)
-    ovverwrite_ind = size(rez.cProj,2)*ones(1,Nfilt*2);
-    ovverwrite_ind_sign = -1*ones(1,Nfilt*2);
+    ovverwrite_ind = size(rez.cProj,2)*ones(1,Nfilt*3);
+    ovverwrite_ind_sign = -1*ones(1,Nfilt*3);
 else
-    ovverwrite_ind = (Nfilt+1)*ones(1,Nfilt*2);
-    ovverwrite_ind_sign = ones(1,Nfilt*2);
+    ovverwrite_ind = (Nfilt+1)*ones(1,Nfilt*3);
+    ovverwrite_ind_sign = ones(1,Nfilt*3);
 end
 
 while ik<Nfilt    
